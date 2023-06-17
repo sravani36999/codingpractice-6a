@@ -36,6 +36,7 @@ const convertDbObjectToResponseObject = (dbObject) => {
     population: dbObject.population,
     districtId: dbObject.district_id,
     districtName: dbObject.district_name,
+    stateId: dbObject.state_id,
     cases: dbObject.cases,
     cured: dbObject.cured,
     active: dbObject.active,
@@ -46,14 +47,16 @@ const convertDbObjectToResponseObject = (dbObject) => {
 //1 Returns a list of all states in the state table
 
 app.get("/states/", async (request, response) => {
-  const getStates = `SELECT 
-    * 
-    FROM 
-    state;`;
-  const statesArray = await db.all(getStates);
-  response.send(
-    statesArray.map((state) => convertDbObjectToResponseObject(state))
-  );
+  try {
+    const getStateQuery = `SELECT * FROM state`;
+    const stateArray = await db.all(getStateQuery);
+    response.send(
+      stateArray.map((states) => convertDbObjectToResponseObject(states))
+    );
+  } catch (e) {
+    console.log(`DB Error: ${e.message}`);
+    process.exit(1);
+  }
 });
 
 //2 Returns a state based on the state ID
@@ -110,10 +113,15 @@ app.post("/districts/", async (request, response) => {
 app.get("/districts/:districtId/", async (request, response) => {
   try {
     const { districtId } = request.params;
-    const districtDetails = `SELECT * FROM district 
-    WHERE district_id = ${districtId}`;
-    const dbResponse = await db.all(districtDetails);
-    response.send(convertDbObjectToResponseObject(dbResponse));
+    const getDistrictQuery = `
+    SELECT
+      *
+    FROM
+      district
+    WHERE
+      district_id = ${districtId};`;
+    const district = await db.get(getDistrictQuery);
+    response.send(convertDbObjectToResponseObject(district));
   } catch (e) {
     console.log(`DB Error: ${e.message}`);
     process.exit(1);
@@ -125,9 +133,12 @@ app.get("/districts/:districtId/", async (request, response) => {
 app.delete("/districts/:districtId/", async (request, response) => {
   try {
     const { districtId } = request.params;
-    const removeDistrictDetails = `SELECT * FROM district 
-    WHERE district_id = ${districtId};`;
-    await db.run(removeDistrictDetails);
+    const deleteDistrictQuery = `
+    DELETE FROM
+      district
+    WHERE
+      district_id = ${districtId};`;
+    await db.run(deleteDistrictQuery);
     response.send("District Removed");
   } catch (e) {
     console.log(`DB Error: ${e.message}`);
@@ -196,14 +207,21 @@ app.get("/states/:stateId/stats/", async (request, response) => {
 app.get("/districts/:districtId/details/", async (request, response) => {
   try {
     const { districtId } = request.params;
-    const stateDetails = `SELECT state_name FROM state 
-        NATURAL JOIN district 
-        WHERE district_id = ${districtId}`;
-    const stateName = await db.get(stateDetails);
-    response.send(convertDbObjectToResponseObject(stateName));
+    const getDistrictIdQuery = `
+select state_id from district
+where district_id = ${districtId};`; //With this we will get the state_id using district table
+    const getDistrictIdQueryResponse = await db.get(getDistrictIdQuery);
+
+    const getStateNameQuery = `
+select state_name as stateName from state
+where state_id = ${getDistrictIdQueryResponse.state_id};
+`; //With this we will get state_name as stateName using the state_id
+    const getStateNameQueryResponse = await db.get(getStateNameQuery);
+    response.send(getStateNameQueryResponse);
   } catch (e) {
     console.log(`DB Error: ${e.message}`);
     process.exit(1);
   }
-});
+}); //sending the required response
+
 module.exports = app;
